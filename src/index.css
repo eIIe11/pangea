@@ -1,0 +1,64 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-pg-bg: #0e1112;
+  --color-pg-surface: #151a1c;
+  --color-pg-line: #232b2e;
+  --color-pg-text: #e8edee;
+  --color-pg-mute: #8b979b;
+  --color-pg-accent: #5e9aac;
+  --color-pg-gold: #c99a4b;
+  --color-pg-up: #3fb37f;
+  --color-pg-down: #d95f5f;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+
+  --animate-coin: coin 20s linear infinite;
+
+  @keyframes coin {
+    from {
+      transform: perspective(900px) rotateY(0deg);
+    }
+    to {
+      transform: perspective(900px) rotateY(360deg);
+    }
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-pg-bg);
+  color: var(--color-pg-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+/* Numbers are the content; never let them reflow between renders. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+/* A control surface, not a website: no tap highlight, no text selection drag. */
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -1,0 +1,23 @@
+[package]
+name = "pangea"
+version = "0.1.0"
+description = "Control surface for the SESSION systematic trading platform"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "pangea_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+panic = "abort"
+codegen-units = 1
