@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Coin } from './components/Coin'
 import { InstallHint } from './components/InstallHint'
 import { Stamp } from './components/ui'
-import { getSnapshot } from './lib/api'
+import { ApiError, IS_DEMO, getSnapshot } from './lib/api'
+import { logout } from './lib/auth'
 import { Lock } from './screens/Lock'
+import { SignIn } from './screens/SignIn'
 import { Now } from './screens/Now'
 import { Research } from './screens/Research'
 import { Strategies } from './screens/Strategies'
@@ -21,8 +23,15 @@ function initialScreen(): Screen {
 }
 
 export function App() {
-  const [user, setUser] = useState<string | null>(() => localStorage.getItem(UNLOCK_KEY))
+  // Only demo mode may resume from storage: with an engine, the httpOnly session decides, so
+  // remembering a name here would send an expired session straight past sign-in and strand it
+  // on the error screen. SignIn re-reads /api/auth/status and walks straight in when the
+  // cookie is still good.
+  const [user, setUser] = useState<string | null>(() =>
+    IS_DEMO ? localStorage.getItem(UNLOCK_KEY) : null,
+  )
   const [screen, setScreen] = useState<Screen>(initialScreen)
+  const queries = useQueryClient()
 
   const snapshot = useQuery({
     queryKey: ['snapshot'],
@@ -33,23 +42,58 @@ export function App() {
   })
 
   useEffect(() => {
+    if (!IS_DEMO) return
     if (user) localStorage.setItem(UNLOCK_KEY, user)
+    else localStorage.removeItem(UNLOCK_KEY)
   }, [user])
 
-  if (user === null) return <Lock onUnlock={setUser} />
+  const error = snapshot.error
+  const expired = error instanceof ApiError && (error.status === 401 || error.status === 403)
+
+  useEffect(() => {
+    // A refused session is a locked app, not an error to stare at.
+    if (!expired) return
+    setUser(null)
+    queries.removeQueries({ queryKey: ['snapshot'] })
+  }, [expired, queries])
+
+  function lock() {
+    setUser(null)
+    queries.removeQueries({ queryKey: ['snapshot'] })
+  }
+
+  if (user === null) return IS_DEMO ? <Lock onUnlock={setUser} /> : <SignIn onSignedIn={setUser} />
 
   if (snapshot.isError) {
     return (
       <div className="grid min-h-full place-items-center px-6 text-center">
         <div className="space-y-3">
           <Coin size={80} spin={false} />
-          <p className="text-sm text-pg-down">Engine unreachable.</p>
+          <p className="text-sm text-pg-down">
+            {error instanceof ApiError && error.status === 503
+              ? 'No account state yet.'
+              : 'Engine unreachable.'}
+          </p>
+          {/* The engine's own words: "no IBKR gateway configured" is the answer, not a detail. */}
+          <p className="text-xs text-pg-mute">{error instanceof Error ? error.message : null}</p>
           <p className="text-xs text-pg-mute">
             No numbers are shown rather than stale ones. The CLI and webhook kill switches do not depend on this app.
           </p>
-          <button type="button" onClick={() => snapshot.refetch()} className="rounded-lg border border-pg-line px-4 py-2 text-xs uppercase">
-            Retry
-          </button>
+          <div className="flex justify-center gap-2">
+            <button type="button" onClick={() => snapshot.refetch()} className="rounded-lg border border-pg-line px-4 py-2 text-xs uppercase">
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (IS_DEMO) return lock()
+                void logout().finally(lock)
+              }}
+              className="rounded-lg border border-pg-line px-4 py-2 text-xs uppercase"
+            >
+              Lock
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -64,7 +108,20 @@ export function App() {
           <Coin size={22} />
           <span className="text-xs font-semibold tracking-[0.22em] uppercase">Pangea</span>
         </span>
-        {data ? <Stamp asOf={data.asOf} source={data.source} /> : <span className="text-[11px] text-pg-mute">loading…</span>}
+        <span className="flex items-center gap-3">
+          {data ? <Stamp asOf={data.asOf} source={data.source} /> : <span className="text-[11px] text-pg-mute">loading…</span>}
+          {IS_DEMO ? null : (
+            <button
+              type="button"
+              onClick={() => {
+                void logout().finally(lock)
+              }}
+              className="text-[11px] tracking-[0.14em] text-pg-mute uppercase"
+            >
+              Lock
+            </button>
+          )}
+        </span>
       </header>
 
       <main className="flex-1 px-4 py-4">

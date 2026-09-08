@@ -33,8 +33,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | typeof 
       credentials: 'include',
       headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
     })
-    if (!response.ok) throw new ApiError(`${path} failed`, response.status)
     const body = (await response.text()).trim()
+    // The engine's refusals carry the reason it refused — "no IBKR gateway configured" is the
+    // whole message, and swallowing it leaves the operator staring at a generic failure.
+    if (!response.ok) throw new ApiError(reasonFrom(body) ?? `${path} failed`, response.status)
     return body === '' ? NO_BODY : (JSON.parse(body) as T)
   } catch (error) {
     if (error instanceof ApiError) throw error
@@ -42,6 +44,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | typeof 
   } finally {
     clearTimeout(timer)
   }
+}
+
+function reasonFrom(body: string): string | undefined {
+  if (body === '') return undefined
+  try {
+    const parsed: unknown = JSON.parse(body)
+    if (typeof parsed === 'object' && parsed !== null && 'detail' in parsed) {
+      const { detail } = parsed as { detail: unknown }
+      if (typeof detail === 'string' && detail !== '') return detail
+    }
+  } catch {
+    return undefined
+  }
+  return undefined
 }
 
 export async function getSnapshot(): Promise<Snapshot> {
