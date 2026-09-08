@@ -15,13 +15,28 @@
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
 
   --animate-coin: coin 20s linear infinite;
+  --animate-shake: shake 0.4s ease-in-out;
 
+  /* Perspective lives on the coin's container, so the solid turns rather than skews. */
   @keyframes coin {
     from {
-      transform: perspective(900px) rotateY(0deg);
+      transform: rotateY(0deg);
     }
     to {
-      transform: perspective(900px) rotateY(360deg);
+      transform: rotateY(360deg);
+    }
+  }
+
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-6px);
+    }
+    75% {
+      transform: translateX(6px);
     }
   }
 }

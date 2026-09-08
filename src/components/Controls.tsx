@@ -10,7 +10,9 @@ const ENGINE_TEXT: Record<EngineState, string> = {
 
 /**
  * Three levels, not two (§17). STOP EVERYTHING has no confirmation dialog by design:
- * it must work one-tap, from a phone, on bad wifi.
+ * it must work one-tap, from a phone, on bad wifi. It also stays tappable while a command is
+ * in flight — halting twice is harmless, whereas halving twice is not, so the graduated
+ * controls lock until the previous command settles.
  */
 export function Controls({ engine }: { engine: EngineState }) {
   const queryClient = useQueryClient()
@@ -25,7 +27,7 @@ export function Controls({ engine }: { engine: EngineState }) {
         <button
           type="button"
           onClick={() => control.mutate('halve')}
-          disabled={engine === 'halted'}
+          disabled={engine === 'halted' || control.isPending}
           className="rounded-xl border border-pg-line py-3 text-xs font-semibold tracking-[0.12em] uppercase disabled:opacity-40"
         >
           Halve everything
@@ -33,7 +35,7 @@ export function Controls({ engine }: { engine: EngineState }) {
         <button
           type="button"
           onClick={() => control.mutate(engine === 'entries_paused' ? 'resume' : 'pause_entries')}
-          disabled={engine === 'halted'}
+          disabled={engine === 'halted' || control.isPending}
           className="rounded-xl border border-pg-line py-3 text-xs font-semibold tracking-[0.12em] uppercase disabled:opacity-40"
         >
           {engine === 'entries_paused' ? 'Resume entries' : 'Pause new entries'}
@@ -46,9 +48,19 @@ export function Controls({ engine }: { engine: EngineState }) {
       >
         ⏻ Stop everything
       </button>
-      <p className="text-center text-[11px] text-pg-mute">
-        {control.isPending ? 'Sending…' : control.isError ? 'Command failed — retry, or use the CLI kill switch.' : ENGINE_TEXT[engine]}
+      <p className="text-center text-[11px] text-pg-mute" aria-live="polite">
+        {control.isPending ? 'Sending…' : ENGINE_TEXT[engine]}
       </p>
+      {control.isError && (
+        <p className="text-center text-[11px] text-pg-down" aria-live="polite">
+          Command failed — retry, or use the CLI kill switch.
+        </p>
+      )}
+      {control.data && !control.data.accepted && (
+        <p className="text-center text-[11px] text-pg-gold" aria-live="polite">
+          {control.data.reason}
+        </p>
+      )}
     </div>
   )
 }

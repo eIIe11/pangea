@@ -1,15 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { submitManualOrder, type ManualOrder } from '../lib/api'
-import { fmtMoney, fmtRatio } from '../lib/format'
+import { fmtRatio } from '../lib/format'
 import type { Account, Position } from '../lib/types'
-import { Label } from './ui'
+import { Label, Stamp } from './ui'
 
 const SYMBOLS = ['MES', 'MNQ', 'M6E', 'MGC'] as const
 const RISKS: ManualOrder['riskPct'][] = [0.25, 0.5, 0.75, 1]
 const STOPS: ManualOrder['stop'][] = ['tight', 'normal', 'wide']
 const STOP_ATR: Record<ManualOrder['stop'], string> = { tight: '0.8× ATR', normal: '1.4× ATR', wide: '2.2× ATR' }
-const DAILY_LOSS_LIMIT = 0.02
 
 function Choice<T extends string | number>({
   options,
@@ -65,10 +64,9 @@ export function ManualTrade({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['snapshot'] }),
   })
 
-  const riskFraction = riskPct / 100
-  const resultingRisk = account.riskUsed + riskFraction / 0.02
-  const dailyBudgetLeft = Math.max(0, DAILY_LOSS_LIMIT + Math.min(0, account.returns.day)) - riskFraction
-  const correlated = positions.filter((p) => p.side !== 'flat' && p.symbol !== symbol).map((p) => p.symbol)
+  // Sizing, margin and the correlation matrix live in the engine; this modal shows only what
+  // the snapshot already states, so nothing on screen is a number the app invented.
+  const heldElsewhere = positions.filter((p) => p.side !== 'flat' && p.symbol !== symbol).map((p) => p.symbol)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/70 sm:items-center sm:justify-center" role="dialog" aria-modal>
@@ -94,23 +92,29 @@ export function ManualTrade({
         </div>
 
         <div className="space-y-1 rounded-xl border border-pg-line p-3 text-xs text-pg-mute">
-          <Label>Pre-trade impact</Label>
-          <div className="flex justify-between">
-            <span>Portfolio risk after fill</span>
-            <span className="tnum text-pg-text">{fmtRatio(Math.min(1, resultingRisk))}</span>
+          <div className="flex items-center justify-between">
+            <Label>Context</Label>
+            <Stamp asOf={account.asOf} source={account.source} />
           </div>
           <div className="flex justify-between">
-            <span>Correlates with</span>
-            <span className="text-pg-text">{correlated.length ? correlated.join(', ') : 'nothing held'}</span>
+            <span>Risk used now</span>
+            <span className="tnum text-pg-text">{fmtRatio(account.riskUsed)}</span>
           </div>
           <div className="flex justify-between">
-            <span>Daily loss budget left</span>
-            <span className="tnum text-pg-text">{fmtRatio(dailyBudgetLeft, 2)}</span>
+            <span>Requested risk</span>
+            <span className="tnum text-pg-text">{riskPct.toFixed(2)}%</span>
           </div>
           <div className="flex justify-between">
-            <span>Margin buffer after fill</span>
-            <span className="tnum text-pg-text">{fmtMoney(account.equityUsd * 0.72)}</span>
+            <span>Also held</span>
+            <span className="text-pg-text">{heldElsewhere.length ? heldElsewhere.join(', ') : 'nothing'}</span>
           </div>
+          <div className="flex justify-between">
+            <span>Day return</span>
+            <span className="tnum text-pg-text">{fmtRatio(account.returns.day, 2)}</span>
+          </div>
+          <p className="pt-1 text-[11px] text-pg-mute">
+            Sizing, margin and correlation checks run in the engine. It sizes and may reject this order.
+          </p>
         </div>
 
         <button
