@@ -45,6 +45,38 @@ There is deliberately no endpoint for changing a risk limit, an allocation or a
 parameter. Those live in version-controlled config and need a service restart, so the
 app physically cannot loosen a limit (§12, §17).
 
+## The API (`server/`)
+
+A FastAPI service that implements the contract above and, first, real authentication.
+
+```
+cd server
+python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+cp .env.example .env      # fill in SESSION_SECRET, RP_ID, ORIGIN, ENROLL_CODE
+.venv/bin/uvicorn app.main:app --reload
+```
+
+| Method | Path | What it does |
+|---|---|---|
+| `GET` | `/api/auth/status` | What the lock screen needs: whether anyone is enrolled, whether a session exists, whether a code is owed |
+| `POST` | `/api/auth/passkey/enroll/options` \| `/verify` | Registers a platform passkey — Face ID, Touch ID, Windows Hello. Needs `PANGEA_ENROLL_CODE` |
+| `POST` | `/api/auth/passkey/login/options` \| `/verify` | Signs in with the passkey. Issues the session, or a 5-minute pending one if an authenticator is enrolled |
+| `POST` | `/api/auth/totp/enroll` \| `/enroll/verify` | Returns an `otpauth://` URI and a QR to scan with Google Authenticator; the secret is inert until a code from it verifies |
+| `POST` | `/api/auth/totp/login` | Second factor, reachable only after the passkey step |
+| `GET` | `/api/market/quotes` | Real quotes for the watchlist, each with the exchange time it was true |
+| `GET` | `/api/broker/status` | Whether a broker is connected, and if not, why |
+
+Why the server and not the app: a passkey's private key never leaves the phone's secure
+enclave and its signature is checked against a stored public key, and the session is a
+signed `httpOnly` cookie the page's JavaScript cannot read or mint. A passcode or a TOTP
+check running in the bundle can be read out of the bundle — which is why the keypad on
+the lock screen is described as a device gate and nothing more.
+
+Authentication is real now. **Account state is not**: `/api/snapshot` answers `503` with
+the reason until an IBKR gateway is configured and connected, and controls and manual
+orders answer `{ accepted: false, reason }` saying nothing was sent. An order the
+operator believes was routed is worse than a visible refusal.
+
 ## Rules this app enforces
 
 - **No number without a timestamp.** Anything older than 60s is marked stale in red; on
@@ -79,6 +111,9 @@ src/
   lib/       types, formatting, session calendar, API client, demo feed
   components/ coin, controls, manual-trade modal, chart, primitives
   screens/   Lock, Now, Strategies, Trades, Research
+server/
+  app/       auth (passkeys, TOTP), sessions, market data, broker seam, engine routes
+  tests/     what may move money, and what must refuse to
 src-tauri/   desktop shell (a window; no logic)
 scripts/     regenerate app icons from the coin artwork
 ```
