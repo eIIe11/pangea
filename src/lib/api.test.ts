@@ -88,4 +88,26 @@ describe('snapshot transport', () => {
     const { getSnapshot } = await liveApi()
     await expect(getSnapshot()).rejects.toThrow('no data')
   })
+
+  it('carries the engine reason, so a refusal is not shown as a generic failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ detail: 'No IBKR gateway configured.' }, { status: 503 })),
+    )
+    const { getSnapshot, ApiError } = await liveApi()
+    await expect(getSnapshot()).rejects.toMatchObject({
+      message: 'No IBKR gateway configured.',
+      status: 503,
+    })
+    expect(await getSnapshot().catch((error: unknown) => error instanceof ApiError)).toBe(true)
+  })
+
+  it('falls back to naming the path when the engine sends no reason', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>gateway</html>', { status: 502 })),
+    )
+    const { getSnapshot } = await liveApi()
+    await expect(getSnapshot()).rejects.toThrow('/api/snapshot failed')
+  })
 })

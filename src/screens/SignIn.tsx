@@ -59,6 +59,12 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: string) => void }) {
     }
   }
 
+  /** Only the engine's `authenticated: true` opens the app; a 2xx that refuses is still a refusal. */
+  function admit(result: { authenticated: boolean; user?: string | null }) {
+    if (!result.authenticated) throw new Error('the engine did not grant a session')
+    onSignedIn(result.user ?? 'Elle')
+  }
+
   const signIn = () =>
     run(async () => {
       const result = await loginWithPasskey(USER_ID)
@@ -67,7 +73,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: string) => void }) {
         setStep('totp')
         return
       }
-      onSignedIn(result.user ?? USER_ID)
+      admit(result)
     })
 
   const enrol = () =>
@@ -75,6 +81,8 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: string) => void }) {
       await enrollPasskey(USER_ID, 'Elle', enrolCode)
       const result = await loginWithPasskey(USER_ID)
       if (!result.authenticated) throw new Error('enrolled, but the session was refused')
+      // The QR is only reachable with that session, so skipping it is safe: the passkey has
+      // already been verified server-side and is on its own stronger than a keypad.
       setTotp(await startTotpEnrolment())
       setCode('')
       setStep('totp-setup')
@@ -87,8 +95,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: string) => void }) {
         onSignedIn('Elle')
         return
       }
-      const result = await totpLogin(code)
-      onSignedIn(result.user)
+      admit(await totpLogin(code))
     })
 
   return (
@@ -185,7 +192,11 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: string) => void }) {
             {step === 'totp-setup' ? (
               <button
                 type="button"
-                onClick={() => onSignedIn('Elle')}
+                onClick={() =>
+                  run(async () => {
+                    admit(await getAuthStatus())
+                  })
+                }
                 className="w-full text-center text-[11px] underline"
               >
                 Skip for now — passkey only
