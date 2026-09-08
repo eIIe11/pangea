@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Coin } from '../components/Coin'
 import { IS_DEMO } from '../lib/api'
+import { resolvePasscode } from '../lib/passcode'
+
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'] as const
+const { passcode: PASSCODE, misconfigured: MISCONFIGURED } = resolvePasscode(
+  import.meta.env.VITE_LOCK_PASSCODE,
+)
 
 /**
  * Device gate, not authentication: the passcode ships in the bundle, so it only stops
  * someone picking up an unlocked phone. The engine authenticates every request itself,
  * and nothing typed here can widen a risk limit.
  */
-const PASSCODE = import.meta.env.VITE_LOCK_PASSCODE ?? '091285'
-const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'] as const
-
 export function Lock({ onUnlock }: { onUnlock: (user: string) => void }) {
   const [entry, setEntry] = useState('')
   const [error, setError] = useState(false)
@@ -30,6 +33,7 @@ export function Lock({ onUnlock }: { onUnlock: (user: string) => void }) {
 
   function press(key: string) {
     if (key === '⌫') {
+      setError(false)
       setEntry((current) => current.slice(0, -1))
       return
     }
@@ -87,9 +91,11 @@ export function Lock({ onUnlock }: { onUnlock: (user: string) => void }) {
         <p className="min-h-4 text-center text-[11px] text-pg-bg/80">
           {error
             ? 'Wrong passcode.'
-            : IS_DEMO
-              ? 'Demo mode — no engine configured behind this screen.'
-              : 'Engine session required after unlock.'}
+            : MISCONFIGURED
+              ? 'VITE_LOCK_PASSCODE is not 4-10 digits — using the default passcode.'
+              : IS_DEMO
+                ? 'Demo mode — no engine configured behind this screen.'
+                : 'Engine session required after unlock.'}
         </p>
       </div>
     </div>

@@ -17,10 +17,13 @@ export class ApiError extends Error {
 const TIMEOUT_MS = 4_000
 
 /**
- * Resolves to null when the engine answers 2xx with no body: an accepted kill switch that
- * returns 204 must never surface to the operator as a failure.
+ * Resolves to NO_BODY when the engine answers 2xx with nothing: an accepted kill switch that
+ * returns 204 must never surface to the operator as a failure. Distinct from a JSON `null`,
+ * which is a body the engine chose to send and cannot be read as a result.
  */
-async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
+export const NO_BODY = Symbol('no body')
+
+async function request<T>(path: string, init?: RequestInit): Promise<T | typeof NO_BODY> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
@@ -32,7 +35,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
     })
     if (!response.ok) throw new ApiError(`${path} failed`, response.status)
     const body = (await response.text()).trim()
-    return body === '' ? null : (JSON.parse(body) as T)
+    return body === '' ? NO_BODY : (JSON.parse(body) as T)
   } catch (error) {
     if (error instanceof ApiError) throw error
     throw new ApiError(error instanceof Error ? error.message : 'network error')
@@ -44,7 +47,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
 export async function getSnapshot(): Promise<Snapshot> {
   if (IS_DEMO) return demoSnapshot()
   const snapshot = await request<Snapshot>('/api/snapshot')
-  if (snapshot === null) throw new ApiError('/api/snapshot returned no data')
+  if (snapshot === NO_BODY) throw new ApiError('/api/snapshot returned no data')
   return snapshot
 }
 
@@ -58,16 +61,28 @@ export interface ControlResult {
   reason?: string
 }
 
+/**
+ * An empty 2xx means accepted; anything else has to say so explicitly. Defaulting a missing
+ * `accepted` to true would report an unconfirmed order as routed.
+ */
+function asControlResult(path: string, body: unknown): ControlResult {
+  if (body === NO_BODY) return { accepted: true }
+  if (typeof body !== 'object' || body === null || !('accepted' in body))
+    throw new ApiError(`${path} returned an unreadable result`)
+  const { accepted, reason } = body as { accepted: unknown; reason?: unknown }
+  if (typeof accepted !== 'boolean') throw new ApiError(`${path} returned an unreadable result`)
+  return { accepted, ...(typeof reason === 'string' ? { reason } : {}) }
+}
+
 export async function sendControl(action: ControlAction): Promise<ControlResult> {
   if (IS_DEMO) {
     return { accepted: false, reason: 'Demo mode — no engine connected, nothing was sent.' }
   }
-  const result = await request<Partial<ControlResult>>('/api/control', {
+  const result = await request<unknown>('/api/control', {
     method: 'POST',
     body: JSON.stringify({ action }),
   })
-  if (result === null) return { accepted: true }
-  return { accepted: result.accepted ?? true, ...(result.reason === undefined ? {} : { reason: result.reason }) }
+  return asControlResult('/api/control', result)
 }
 
 export interface ManualOrder {
@@ -79,12 +94,11 @@ export interface ManualOrder {
 
 export async function submitManualOrder(order: ManualOrder): Promise<ControlResult> {
   if (IS_DEMO) return { accepted: false, reason: 'Demo mode — no engine connected, nothing was routed.' }
-  const result = await request<Partial<ControlResult>>('/api/orders/manual', {
+  const result = await request<unknown>('/api/orders/manual', {
     method: 'POST',
     body: JSON.stringify(order),
   })
-  if (result === null) return { accepted: true }
-  return { accepted: result.accepted ?? true, ...(result.reason === undefined ? {} : { reason: result.reason }) }
+  return asControlResult('/api/orders/manual', result)
 }
 
 export function tradesCsv(trades: Snapshot['trades']): string {

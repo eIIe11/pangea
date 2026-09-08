@@ -35,6 +35,18 @@ describe('control transport', () => {
     })
   })
 
+  it.each([['{}'], ['null'], ['7'], ['"ok"'], ['{"accepted":"yes"}']])(
+    'refuses to read %s as a result',
+    async (body) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(body, { status: 200 })),
+      )
+      const { sendControl } = await liveApi()
+      await expect(sendControl('halve')).rejects.toThrow('unreadable result')
+    },
+  )
+
   it('fails loudly on a non-2xx', async () => {
     vi.stubGlobal(
       'fetch',
@@ -51,6 +63,19 @@ describe('control transport', () => {
     const result = await submitManualOrder({ symbol: 'MES', side: 'long', riskPct: 0.5, stop: 'normal' })
     expect(result.accepted).toBe(false)
     expect(result.reason).toContain('nothing was routed')
+  })
+})
+
+describe('manual order transport', () => {
+  it('never reports an unconfirmed order as routed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ ok: true })),
+    )
+    const { submitManualOrder } = await liveApi()
+    await expect(
+      submitManualOrder({ symbol: 'MES', side: 'long', riskPct: 0.5, stop: 'normal' }),
+    ).rejects.toThrow('unreadable result')
   })
 })
 
