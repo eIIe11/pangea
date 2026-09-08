@@ -29,7 +29,7 @@ describe('staleness', () => {
   const now = Date.parse('2026-09-08T06:00:00.000Z')
 
   it('ages timestamps in words', () => {
-    expect(fmtAge(new Date(now - 2_000).toISOString(), now)).toBe('live')
+    expect(fmtAge(new Date(now - 2_000).toISOString(), now)).toBe('just now')
     expect(fmtAge(new Date(now - 30_000).toISOString(), now)).toBe('30s ago')
     expect(fmtAge(new Date(now - 600_000).toISOString(), now)).toBe('10m ago')
     expect(fmtAge(new Date(now - 3 * 86_400_000).toISOString(), now)).toBe('3d ago')
