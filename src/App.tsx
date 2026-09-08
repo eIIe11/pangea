@@ -3,8 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { Coin } from './components/Coin'
 import { InstallHint } from './components/InstallHint'
 import { Stamp } from './components/ui'
-import { getSnapshot } from './lib/api'
+import { IS_DEMO, getSnapshot } from './lib/api'
+import { logout } from './lib/auth'
 import { Lock } from './screens/Lock'
+import { SignIn } from './screens/SignIn'
 import { Now } from './screens/Now'
 import { Research } from './screens/Research'
 import { Strategies } from './screens/Strategies'
@@ -33,10 +35,13 @@ export function App() {
   })
 
   useEffect(() => {
+    // Demo mode is the only place this is the gate; with an engine the httpOnly session
+    // decides, and this is just which name to greet on reload.
     if (user) localStorage.setItem(UNLOCK_KEY, user)
+    else localStorage.removeItem(UNLOCK_KEY)
   }, [user])
 
-  if (user === null) return <Lock onUnlock={setUser} />
+  if (user === null) return IS_DEMO ? <Lock onUnlock={setUser} /> : <SignIn onSignedIn={setUser} />
 
   if (snapshot.isError) {
     return (
@@ -64,7 +69,20 @@ export function App() {
           <Coin size={22} />
           <span className="text-xs font-semibold tracking-[0.22em] uppercase">Pangea</span>
         </span>
-        {data ? <Stamp asOf={data.asOf} source={data.source} /> : <span className="text-[11px] text-pg-mute">loading…</span>}
+        <span className="flex items-center gap-3">
+          {data ? <Stamp asOf={data.asOf} source={data.source} /> : <span className="text-[11px] text-pg-mute">loading…</span>}
+          {IS_DEMO ? null : (
+            <button
+              type="button"
+              onClick={() => {
+                void logout().finally(() => setUser(null))
+              }}
+              className="text-[11px] tracking-[0.14em] text-pg-mute uppercase"
+            >
+              Lock
+            </button>
+          )}
+        </span>
       </header>
 
       <main className="flex-1 px-4 py-4">

@@ -41,6 +41,18 @@ Contract the FastAPI service must satisfy — see `src/lib/types.ts` for the exa
 | `POST` | `/api/control` | `{ action: 'halve' \| 'pause_entries' \| 'stop_everything' \| 'resume' }` |
 | `POST` | `/api/orders/manual` | `{ symbol, side, riskPct, stop }` → `{ accepted, reason? }` |
 
+## Signing in
+
+With `VITE_API_BASE` set the app signs in against the engine: a platform passkey
+(Face ID / Touch ID / Windows Hello) verified server-side, plus a Google Authenticator
+code when one is enrolled. The session is an httpOnly cookie, so nothing in the bundle
+can read or mint one. The first device asks for the engine's `PANGEA_ENROLL_CODE`, and
+enrolling an authenticator shows a QR to scan.
+
+With `VITE_API_BASE` empty there is no engine to authenticate against, so the app falls
+back to the keypad — a device gate that only stops someone picking up an unlocked phone,
+not authentication, because the passcode ships in the bundle.
+
 There is deliberately no endpoint for changing a risk limit, an allocation or a
 parameter. Those live in version-controlled config and need a service restart, so the
 app physically cannot loosen a limit (§12, §17).
