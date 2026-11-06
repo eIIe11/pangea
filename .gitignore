@@ -7,3 +7,8 @@ dev-dist
 .DS_Store
 src-tauri/target
 src-tauri/gen
+server/.venv
+server/*.db
+__pycache__
+.pytest_cache
+.ruff_cache
